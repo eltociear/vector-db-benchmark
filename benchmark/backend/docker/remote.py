@@ -1,5 +1,5 @@
 import logging
-from typing import Text, Tuple
+from typing import Text
 
 import docker
 import docker.errors
@@ -7,7 +7,7 @@ import docker.models.images
 import docker.models.volumes
 
 from benchmark.backend.docker import DockerBackend
-from benchmark.backend.docker.container import DockerClient, DockerContainer
+from benchmark.backend.docker.container import DockerContainer
 from benchmark.dataset import Dataset
 from benchmark.engine import ContainerConf
 
@@ -32,14 +32,23 @@ class DockerRemoteBackend(DockerBackend):
         volume = self._create_volume(dataset.name)
         self.dataset_volume = volume.name
 
-        # Build the Docker image locally
-        logger.info("Building the %s dataset container locally", dataset.name)
-        image = self._build_local_image(dataset)
+        # Check if the image is already available on the remote. If so, then
+        # there is no need to rebuild it
+        image_name = f"vector-db-benchmark-dataset-{dataset.name}"
+        try:
+            remote_image = self.docker_client.images.get(image_name)
+            logger.info("Image %s is already available on remote", image_name)
+        except docker.errors.ImageNotFound:
+            logger.debug("Could not find image %s on remote", image_name)
 
-        # Push the local image to the remote Docker
-        logger.info("Pushing the local %s image to remote Docker", image.id)
-        remote_image = self._push_image_to_remote(image)
-        logger.info("Local image %s loaded as remote image %s", image, remote_image)
+            # Build the Docker image locally
+            logger.info("Building the %s dataset container locally", dataset.name)
+            image = self._build_local_image(dataset, image_name)
+
+            # Push the local image to the remote Docker
+            logger.info("Pushing the local %s image to remote Docker", image.id)
+            remote_image = self._push_image_to_remote(image)
+            logger.info("Local image %s loaded as remote image %s", image, remote_image)
 
         # Finally, the temporary dataset container might be created and launched
         # to load the data to be then used by clients
@@ -65,7 +74,9 @@ class DockerRemoteBackend(DockerBackend):
             logger.info("Could not find a volume named %s. Creating new", name)
             return self.docker_client.volumes.create(name)
 
-    def _build_local_image(self, dataset: Dataset) -> docker.models.images.Image:
+    def _build_local_image(
+        self, dataset: Dataset, image_name: Text
+    ) -> docker.models.images.Image:
         """
         Build the dataset image locally and return its internal Docker
         representation
@@ -77,7 +88,7 @@ class DockerRemoteBackend(DockerBackend):
             dockerfile="Dockerfile",
         )
         image, _ = self.local_docker_client.images.build(
-            tag=f"vector-db-benchmark-{dataset.name}",
+            tag=image_name,
             path=str(container_conf.dockerfile_path()),
             dockerfile=container_conf.dockerfile,
         )
@@ -91,5 +102,5 @@ class DockerRemoteBackend(DockerBackend):
         :param image: internal Docker image binary representation
         :return: the same image, but on a remote host
         """
-        images = self.docker_client.images.load(image.save())
+        images = self.docker_client.images.load(image.save(named=True))
         return images[0]

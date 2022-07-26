@@ -16,6 +16,7 @@ class ContainerRole(Enum):
 
 @dataclass
 class ContainerConf:
+    container: Optional[Text] = None
     engine: Optional[Text] = None
     dataset: Optional[Text] = None
     image: Optional[Text] = None
@@ -24,6 +25,17 @@ class ContainerConf:
     main: Optional[Text] = None
     hostname: Optional[Text] = None
     ports: List[int] = field(default_factory=list)
+
+    def name(self) -> Text:
+        if self.engine is not None and self.container is not None:
+            # There might be several Dockerfiles, so we need to distinguish
+            # which one we built and put that information into the image name
+            return f"{self.engine}-{self.container}"
+        if self.engine is not None:
+            return self.engine
+        if self.dataset is not None:
+            return self.dataset
+        raise ValueError("Either engine or dataset property has to be set")
 
     def dockerfile_path(self) -> Path:
         """
@@ -49,7 +61,9 @@ class Engine:
         with open(BASE_DIRECTORY / "engine" / name / "config.json", "r") as fp:
             config = json.load(fp)
             for container_name, conf in config.items():
-                container_configs[container_name] = ContainerConf(engine=name, **conf)
+                container_configs[container_name] = ContainerConf(
+                    container=container_name, engine=name, **conf
+                )
         return Engine(container_configs)
 
     def __init__(self, container_configs: Dict[Text, ContainerConf]):

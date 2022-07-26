@@ -103,13 +103,18 @@ class DockerBackend(Backend):
             return self.docker_client.networks.create(self.NETWORK_NAME)
 
     def build_from_dockerfile(self, conf: ContainerConf):
-        image, logs = self.docker_client.images.build(
-            path=str(conf.dockerfile_path()),
-            dockerfile=conf.dockerfile,
-        )
-        logger.info(
-            "Built %s into a Docker image %s",
-            conf.dockerfile,
-            image.id,
-        )
+        image_name = f"vector-db-benchmark-engine-{conf.name()}"
+        try:
+            image = self.docker_client.images.get(image_name)
+        except docker.errors.ImageNotFound:
+            image, _ = self.docker_client.images.build(
+                path=str(conf.dockerfile_path()),
+                dockerfile=conf.dockerfile,
+                tag=image_name,
+            )
+            logger.info(
+                "Built %s into a Docker image %s",
+                conf.dockerfile,
+                image.id,
+            )
         return image
