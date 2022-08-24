@@ -1,0 +1,13 @@
+version: '3.7'
+
+services:
+  qdrant_bench:
+    image: vespaengine/vespa:8.40.27
+    hostname: vespa-container
+    ports:
+      - '8080:8080'
+      - '19071:19071'
+    deploy:
+      resources:
+        limits:
+          memory: 25Gb

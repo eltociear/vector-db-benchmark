@@ -16,6 +16,7 @@ elasticsearch = "^8.3.1"
 pymilvus = "^2.1.0"
 protobuf = "3.20.0"
 redis = "^4.3.4"
+pyvespa = "^0.24.0"
 
 
 [tool.poetry.dev-dependencies]
